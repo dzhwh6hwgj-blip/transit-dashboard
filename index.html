@@ -202,37 +202,31 @@
     </div>
   </div>
 
-  <script>
-    // System Memory Cache
-    let rawTransit = null;
-    let rawCalendar = null;
-    let rawWeather = null;
+    <script>
+    // HARDCODED CONFIGURATION FOR STANDALONE URL RUNNING (KITCAST)
+    const MY_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJ0OUhrVHFFenVlNzgxZVRYejdST21Gak9zVC1tcjNtOXRrZWhQamhYRGxVIiwiaWF0IjoxNzc2OTEzNDc1fQ.RaeiQ2b0hql4xroCJS8WO7H9osZKxCYQDulnVZm2UFc";
+    const MY_TRANSIT_URL = "https://api.transport.nsw.gov.au/v1/tp/departure_mon?outputFormat=rapidJSON&type_dm=stop&name_dm=10115902&mode=direct&TfNSWDM=true&realtime=true";
 
-    // Data-Bridge Functions called from iOS Scriptable Engine context
-    window.updateTransitData = function(data) { rawTransit = data; };
-    window.updateCalendarData = function(data) { rawCalendar = data; };
-    window.updateWeatherData = function(data) { rawWeather = data; };
-
-    window.initializeDashboard = function() {
-      window.updateUI();
-    };
-
-    window.updateUI = function() {
-      // 1. RENDER WEATHER PAYLOADS
-      if (rawWeather) {
-        const wEl = document.getElementById('weather-display');
-        let txt = `${rawWeather.icon} ${rawWeather.temp}°C`;
-        if (rawWeather.rainMsg) {
-          txt += ` | <span style="color:#60a5fa; font-size:0.9rem;">${rawWeather.rainMsg}</span>`;
-        }
-        wEl.innerHTML = txt;
+    // 1. FETCH TRANSIT DATA DIRECTLY FROM THE BROWSER
+    async function fetchTransit() {
+      try {
+        let res = await fetch(MY_TRANSIT_URL, {
+          headers: {
+            "Authorization": "Bearer " + MY_API_KEY,
+            "Accept": "application/json"
+          }
+        });
+        let data = await res.json();
+        renderTransit(data);
+      } catch (e) {
+        console.error("Transit API error:", e);
       }
+    }
 
-      // 2. RENDER TRANSIT ENGINE MONITOR
+    function renderTransit(rawTransit) {
       const transitContainer = document.getElementById('transit-container');
       if (rawTransit && rawTransit.stopEvents) {
         let html = '';
-        // Extract up to 6 next upcoming departures safely
         const departures = rawTransit.stopEvents.slice(0, 6);
         
         if (departures.length === 0) {
@@ -241,12 +235,9 @@
           departures.forEach(ev => {
             const line = ev.transportation.disassembledName || ev.transportation.name;
             const dest = ev.transportation.destination.name;
-            
-            // Calculate remaining timestamps cleanly
             const depTime = new Date(ev.departureTimeEstimated || ev.departureTimePlanned);
             const diffMs = depTime - new Date();
             const diffMin = Math.max(0, Math.round(diffMs / 60000));
-            
             const isImminent = diffMin <= 4;
             const countdownClass = isImminent ? 'countdown imminent' : 'countdown';
             const displayTime = diffMin === 0 ? 'Now' : `${diffMin}m`;
@@ -264,56 +255,49 @@
         }
         transitContainer.innerHTML = html;
       }
+    }
 
-      // 3. RENDER NATIVE CALENDAR TIMELINES
-      if (rawCalendar) {
-        // Today Render Section
-        const todayContainer = document.getElementById('today-events');
-        if (rawCalendar.today && rawCalendar.today.length > 0) {
-          let todayHtml = '';
-          rawCalendar.today.forEach(e => {
-            todayHtml += `
-              <div class="event-card" style="border-left-color: ${e.color}">
-                <strong>${e.title}</strong>
-              </div>
-            `;
-          });
-          todayContainer.innerHTML = todayHtml;
-        } else {
-          todayContainer.innerHTML = '<div class="loading-text" style="text-align:left;">No events scheduled for today.</div>';
-        }
+    // 2. FETCH WEATHER DATA DIRECTLY FROM THE BROWSER
+    async function fetchWeather() {
+      try {
+        const url = "https://api.open-meteo.com/v1/forecast?latitude=-33.6500&longitude=151.2833&current_weather=true&hourly=precipitation_probability&timezone=Australia%2FSydney&forecast_days=1";
+        let res = await fetch(url);
+        let data = await res.json();
+        const cur = data.current_weather;
+        
+        let icon = "☀️";
+        if (cur.weathercode === 1 || cur.weathercode === 2) icon = "🌤";
+        if (cur.weathercode === 3) icon = "☁️";
+        if (cur.weathercode >= 51 && cur.weathercode <= 67) icon = "🌧";
+        if (cur.weathercode >= 80 && cur.weathercode <= 82) icon = "🌦";
+        if (cur.weathercode >= 95) icon = "⛈";
 
-        // Looking Ahead Dynamic Grid Columns Render Section
-        const gridContainer = document.getElementById('upcoming-events-grid');
-        if (rawCalendar.upcoming) {
-          let gridHtml = '';
-          Object.keys(rawCalendar.upcoming).forEach(dayLabel => {
-            let dayEventsHtml = '';
-            const events = rawCalendar.upcoming[dayLabel];
-            
-            if (events && events.length > 0) {
-              events.forEach(e => {
-                dayEventsHtml += `
-                  <div class="mini-event" style="border-left-color: ${e.color}; background: ${e.color}15;">
-                    ${e.title}
-                  </div>
-                `;
-              });
-            } else {
-              dayEventsHtml = '<div class="loading-text" style="font-size:0.75rem;">Clear</div>';
-            }
-
-            gridHtml += `
-              <div class="day-column">
-                <div class="day-header">${dayLabel}</div>
-                ${dayEventsHtml}
-              </div>
-            `;
-          });
-          gridContainer.innerHTML = gridHtml;
-        }
+        let txt = `${icon} ${Math.round(cur.temperature)}°C`;
+        document.getElementById('weather-display').innerHTML = txt;
+      } catch (e) {
+        console.error("Weather error:", e);
       }
-    };
+    }
+
+    // NOTE ON CALENDAR: Standard URLs cannot read your private iOS Apple Calendar app. 
+    // To see your calendar on Kitcast, you must use a public Google Calendar or iCloud Link.
+    function setupPlaceholderCalendar() {
+      document.getElementById('today-events').innerHTML = '<div class="loading-text">Connect Google/iCloud URL for Kitcast Calendar sync.</div>';
+    }
+
+    // STARTUP AND LOOPING HEARTBEAT (Runs every 30 seconds)
+    function init() {
+      fetchTransit();
+      fetchWeather();
+      setupPlaceholderCalendar();
+      
+      setInterval(() => {
+        fetchTransit();
+        fetchWeather();
+      }, 30000);
+    }
+
+    window.onload = init;
   </script>
 </body>
 </html>
