@@ -205,34 +205,39 @@
     const MY_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJ0OUhrVHFFenVlNzgxZVRYejdST21Gak9zVC1tcjNtOXRrZWhQamhYRGxVIiwiaWF0IjoxNzc2OTEzNDc1fQ.RaeiQ2b0hql4xroCJS8WO7H9osZKxCYQDulnVZm2UFc";
     const MY_TRANSIT_URL = "https://api.transport.nsw.gov.au/v1/tp/departure_mon?outputFormat=rapidJSON&type_dm=stop&name_dm=10115902&mode=direct&TfNSWDM=true&realtime=true";
 
-    // 1. FETCH TRANSIT DATA DIRECTLY FROM THE BROWSER (WITH CORS BYPASS)
+        // 1. FETCH TRANSIT DATA DIRECTLY FROM THE BROWSER (VIA PRODUCTION ALLORIGINS ENVELOPE)
     async function fetchTransit() {
       try {
-        const proxyUrl = "https://cors-anywhere.herokuapp.com/";
+        // We route the request through a clean JSON wrapper proxy to entirely satisfy browser security requirements
+        const proxyUrl = "https://api.allorigins.win/get?url=";
+        const targetUrl = encodeURIComponent(MY_TRANSIT_URL);
         
-        let res = await fetch(proxyUrl + MY_TRANSIT_URL, {
-          headers: {
-            "Authorization": "Bearer " + MY_API_KEY,
-            "Accept": "application/json",
-            "X-Requested-With": "XMLHttpRequest"
-          }
-        });
-        let data = await res.json();
+        let res = await fetch(proxyUrl + targetUrl);
+        if (!res.ok) throw new Error("Proxy network mismatch");
+        
+        let wrapper = await res.json();
+        // Extract and parse the pure raw transport JSON text string from the secure payload envelope
+        let data = JSON.parse(wrapper.contents);
+        
         renderTransit(data);
       } catch (e) {
-        console.error("Primary transit engine blocked, engaging secondary structural tunnel...", e);
+        console.error("Primary browser transit pipeline drop, engaging secondary fallback link...", e);
         
-        // Secondary backup bypass layer in case proxy 1 experiences throttling
+        // Secondary ultra-reliable public developer bridge
         try {
-          const backupProxy = "https://api.allorigins.win/get?url=";
-          let res = await fetch(backupProxy + encodeURIComponent(MY_TRANSIT_URL));
-          let wrapper = await res.json();
-          let data = JSON.parse(wrapper.contents);
+          const fallbackProxy = "https://corsproxy.io/?" + encodeURIComponent(MY_TRANSIT_URL);
+          let res = await fetch(fallbackProxy, {
+            headers: {
+              "Authorization": "Bearer " + MY_API_KEY,
+              "Accept": "application/json"
+            }
+          });
+          let data = await res.json();
           renderTransit(data);
         } catch (err) {
-          console.error("All structural proxy layers exhausted:", err);
+          console.error("All public endpoint web bypass layers exhausted:", err);
           document.getElementById('transit-container').innerHTML = 
-            '<div class="loading-text" style="color:#ef4444;">Network Connection Gateway Timeout</div>';
+            '<div class="loading-text" style="color:#ef4444;">Transit Gateway Security Timeout</div>';
         }
       }
     }
