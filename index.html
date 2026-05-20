@@ -201,22 +201,39 @@
 
   <script>
     // HARDCODED CONFIGURATION FOR STANDALONE URL RUNNING (KITCAST)
+    // Make sure your real credentials stay within these quotes
     const MY_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJ0OUhrVHFFenVlNzgxZVRYejdST21Gak9zVC1tcjNtOXRrZWhQamhYRGxVIiwiaWF0IjoxNzc2OTEzNDc1fQ.RaeiQ2b0hql4xroCJS8WO7H9osZKxCYQDulnVZm2UFc";
     const MY_TRANSIT_URL = "https://api.transport.nsw.gov.au/v1/tp/departure_mon?outputFormat=rapidJSON&type_dm=stop&name_dm=10115902&mode=direct&TfNSWDM=true&realtime=true";
 
-    // 1. FETCH TRANSIT DATA DIRECTLY FROM THE BROWSER
+    // 1. FETCH TRANSIT DATA DIRECTLY FROM THE BROWSER (WITH CORS BYPASS)
     async function fetchTransit() {
       try {
-        let res = await fetch(MY_TRANSIT_URL, {
+        const proxyUrl = "https://cors-anywhere.herokuapp.com/";
+        
+        let res = await fetch(proxyUrl + MY_TRANSIT_URL, {
           headers: {
             "Authorization": "Bearer " + MY_API_KEY,
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
           }
         });
         let data = await res.json();
         renderTransit(data);
       } catch (e) {
-        console.error("Transit API error:", e);
+        console.error("Primary transit engine blocked, engaging secondary structural tunnel...", e);
+        
+        // Secondary backup bypass layer in case proxy 1 experiences throttling
+        try {
+          const backupProxy = "https://api.allorigins.win/get?url=";
+          let res = await fetch(backupProxy + encodeURIComponent(MY_TRANSIT_URL));
+          let wrapper = await res.json();
+          let data = JSON.parse(wrapper.contents);
+          renderTransit(data);
+        } catch (err) {
+          console.error("All structural proxy layers exhausted:", err);
+          document.getElementById('transit-container').innerHTML = 
+            '<div class="loading-text" style="color:#ef4444;">Network Connection Gateway Timeout</div>';
+        }
       }
     }
 
@@ -276,8 +293,6 @@
       }
     }
 
-    // NOTE ON CALENDAR: Standard URLs cannot read your private iOS Apple Calendar app. 
-    // To see your calendar on Kitcast, you must use a public Google Calendar or iCloud Link.
     function setupPlaceholderCalendar() {
       document.getElementById('today-events').innerHTML = '<div class="loading-text">Connect Google/iCloud URL for Kitcast Calendar sync.</div>';
     }
